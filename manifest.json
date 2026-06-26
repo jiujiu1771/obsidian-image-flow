@@ -1,0 +1,11 @@
+{
+  "id": "obsidian-image-flow",
+  "name": "Image Flow",
+  "version": "0.1.0",
+  "minAppVersion": "1.5.0",
+  "description": "在笔记内拖拽定位图片，自动转换粘贴或拖入的图片，并通过图库浏览和复制图片链接。",
+  "author": "amao",
+  "authorUrl": "https://github.com/jiujiu1771",
+  "license": "AGPL-3.0",
+  "isDesktopOnly": false
+}
