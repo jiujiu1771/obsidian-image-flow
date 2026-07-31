@@ -37,6 +37,12 @@ https://github.com/jiujiu1771/obsidian-image-flow
 
 ## 更新日志
 
+### v0.2.2
+
+- **移除：图片右上角「编辑图片链接」按钮**
+  - 该按钮在 Obsidian 1.13+ 与原生图片 widget 的悬浮操作按钮（放大镜）位置重叠，且点击后行为与原生点击图片进入编辑态重复，因此移除插件版按钮，保留 Obsidian 原生能力。
+  - 同步清理 `main.js` 中 `ensureEditButton` / `revealImageLinkInEditor` / `activateEditButton` 函数及相关 DOM 守卫，以及 `styles.css` 中 `.iflow-edit-source-button` / `.iflow-edit-active` 样式。
+
 ### v0.2.1
 
 - **修复：Obsidian 1.13.x 下「自由拖拽移动图片」失效**

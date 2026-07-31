@@ -21373,7 +21373,6 @@ class ImageMoveManager {
     const target = evt.target;
     if (!target?.closest) return;
     if (this.isSettingsUiTarget(target)) return;
-    if (target.closest(".iflow-edit-source-button")) return;
     const embed = this.findImageEmbedFromTarget(target);
     if (!embed) return;
 
@@ -21479,36 +21478,13 @@ class ImageMoveManager {
     }
     embed.addClass("iflow-movable");
     embed.setAttribute("title", "拖动图片到光标位置以移动");
-    this.ensureEditButton(embed, imagePath);
 
     embed.addEventListener("dragstart", evt => evt.preventDefault());
-  }
-
-  ensureEditButton(embed, imagePath) {
-    const host = embed.tagName === "IMG" ? embed.parentElement || embed : embed;
-    if (host.querySelector(".iflow-edit-source-button")) return;
-    const button = document.createElement("button");
-    button.className = "iflow-edit-source-button";
-    button.type = "button";
-    button.setAttribute("aria-label", "编辑图片链接");
-    button.setAttribute("title", "编辑图片链接");
-    setIcon(button, "code-2");
-    button.addEventListener("pointerdown", evt => {
-      evt.preventDefault();
-      evt.stopPropagation();
-    });
-    button.addEventListener("click", evt => {
-      evt.preventDefault();
-      evt.stopPropagation();
-      this.revealImageLinkInEditor(embed, imagePath);
-    });
-    host.appendChild(button);
   }
 
   startPointerDrag(evt, embed, notePath, imagePath) {
     if (this.dragState) return;
     if (evt.button !== 0) return;
-    if (evt.target?.closest?.(".iflow-edit-source-button")) return;
     if (this.isResizeGesture(evt, embed)) return;
     const view = this.getMarkdownViewForElement(embed);
     if (!view || !view.editor || !view.file) return;
@@ -21604,27 +21580,6 @@ class ImageMoveManager {
     const target = drag.lastTarget || this.getEditorPositionAtPointer(drag.editor, evt) || drag.editor.getCursor();
     this.cleanupPointerDrag(false);
     if (drag.moved) await this.moveDraggedImage(drag.editor, target, drag);
-    else this.activateEditButton(embed);
-  }
-
-  activateEditButton(embed) {
-    document.querySelectorAll(".iflow-movable.iflow-edit-active").forEach(active => {
-      if (active !== embed) active.removeClass("iflow-edit-active");
-    });
-    embed.addClass("iflow-edit-active");
-  }
-
-  revealImageLinkInEditor(embed, imagePath) {
-    const view = this.getMarkdownViewForElement(embed);
-    if (!view || !view.editor || !view.file) return;
-    const match = this.findSingleImageMatch(view.editor, imagePath, embed);
-    if (!match) {
-      new Notice("未找到对应的图片链接。");
-      return;
-    }
-    view.editor.focus();
-    view.editor.setSelection(match.start, match.end);
-    view.editor.scrollIntoView({ from: match.start, to: match.end }, true);
   }
 
   cleanupPointerDrag(clearState = true) {

@@ -699,8 +699,7 @@
   border-radius: 6px;
 }
 
-.iflow-movable:hover,
-.iflow-movable.iflow-edit-active {
+.iflow-movable:hover {
   outline-color: var(--interactive-accent);
   box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.16);
 }
@@ -713,36 +712,6 @@
 .iflow-movable img {
   user-select: none;
   -webkit-user-drag: none;
-}
-
-.iflow-edit-source-button {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 5;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 6px;
-  background: var(--background-primary);
-  color: var(--text-muted);
-  box-shadow: var(--shadow-s);
-  cursor: pointer;
-}
-
-.iflow-movable.iflow-edit-active .iflow-edit-source-button,
-.iflow-movable:hover .iflow-edit-source-button {
-  display: inline-flex;
-}
-
-.iflow-edit-source-button:hover {
-  background: var(--interactive-accent);
-  color: var(--text-on-accent);
-  border-color: var(--interactive-accent);
 }
 
 .iflow-drag-preview {
