@@ -35,6 +35,16 @@ https://github.com/jiujiu1771/obsidian-image-flow
 - **格式转换**：粘贴或拖入图片时自动处理，设置中可选择目标格式和压缩质量；HEIC / HEIF 可转换为 JPEG / PNG / WebP
 - **复制链接**：选中图片后使用命令「复制选中图片嵌入链接」，或在图库中点击复制按钮
 
+## 更新日志
+
+### v0.2.1
+
+- **修复：Obsidian 1.13.x 下「自由拖拽移动图片」失效**
+  - 根因：1.13 起图片改为 CodeMirror widget，`<img>` 被包进 `.cm-widgetBuffer`；原代码把 `.cm-widgetBuffer` 误判为缩放手柄，导致每次按下图片都被当成缩放手势，拖拽在启动前就被拦截，表现为「无法拖动」。
+  - 坐标解析修复：CodeMirror 6 的 `posAtCoords` 返回的是 `{from,to}` 偏移量而非 `{line,ch}`，旧代码误按 `{line,ch}` 读取导致落点 `setCursor` 失败；改为用 `editor.offsetToPos(offset)` 转换。
+  - 拖拽入口兼容 1.13 的 widget DOM：新增 `findImageEmbedFromTarget`，除 `.image-embed/.internal-embed` 外也接纳原生 `<img>` 及其 `.cm-image-widget` 容器，并在解析不到 `src` 时回退到 `img.alt`（即 `![[名称]]`）定位图片。
+  - 编辑按钮在 embed 为 `<img>` 时挂到父节点（`<img>` 不能包含子元素）。
+
 ## 致谢
 
 本项目基于以下开源项目构建：

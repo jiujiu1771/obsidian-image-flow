@@ -21374,8 +21374,8 @@ class ImageMoveManager {
     if (!target?.closest) return;
     if (this.isSettingsUiTarget(target)) return;
     if (target.closest(".iflow-edit-source-button")) return;
-    const embed = target.closest(".internal-embed.image-embed, .image-embed");
-    if (!embed || !embed.querySelector("img")) return;
+    const embed = this.findImageEmbedFromTarget(target);
+    if (!embed) return;
 
     const view = this.getMarkdownViewForElement(embed);
     if (!view || !view.file || !view.editor) return;
@@ -21386,6 +21386,24 @@ class ImageMoveManager {
       this.decorateEmbed(embed, view.file.path);
     }
     this.startPointerDrag(evt, embed, view.file.path, imagePath);
+  }
+
+  findImageEmbedFromTarget(target) {
+    if (!target || !target.closest) return null;
+    const direct = target.closest(".internal-embed.image-embed, .image-embed");
+    if (direct && direct.querySelector("img")) return direct;
+    const img = target.closest("img");
+    if (img) {
+      let node = img;
+      while (node && node !== document.body) {
+        if (node.classList && (node.classList.contains("image-embed") || node.classList.contains("internal-embed") || node.classList.contains("cm-image-widget"))) {
+          return node.querySelector("img") ? node : node;
+        }
+        node = node.parentElement;
+      }
+      return img;
+    }
+    return null;
   }
 
   isSettingsUiTarget(target) {
@@ -21464,11 +21482,11 @@ class ImageMoveManager {
     this.ensureEditButton(embed, imagePath);
 
     embed.addEventListener("dragstart", evt => evt.preventDefault());
-    embed.addEventListener("pointerdown", evt => this.startPointerDrag(evt, embed, notePath, imagePath));
   }
 
   ensureEditButton(embed, imagePath) {
-    if (embed.querySelector(".iflow-edit-source-button")) return;
+    const host = embed.tagName === "IMG" ? embed.parentElement || embed : embed;
+    if (host.querySelector(".iflow-edit-source-button")) return;
     const button = document.createElement("button");
     button.className = "iflow-edit-source-button";
     button.type = "button";
@@ -21484,7 +21502,7 @@ class ImageMoveManager {
       evt.stopPropagation();
       this.revealImageLinkInEditor(embed, imagePath);
     });
-    embed.appendChild(button);
+    host.appendChild(button);
   }
 
   startPointerDrag(evt, embed, notePath, imagePath) {
@@ -21510,7 +21528,8 @@ class ImageMoveManager {
       pointerId: evt.pointerId,
       preview: this.createFloatingPreview(match.fullMatch),
       lastTarget: null,
-      moved: false
+      moved: false,
+      embedRect: embed.getBoundingClientRect()
     };
     evt.preventDefault();
     evt.stopPropagation();
@@ -21527,7 +21546,7 @@ class ImageMoveManager {
 
   isResizeGesture(evt, embed) {
     const target = evt.target;
-    if (target?.closest?.(".image-resize-handle, .image-resize-corner, .resize-handle, .cm-widgetBuffer")) return true;
+    if (target?.closest?.(".image-resize-handle, .image-resize-corner, .resize-handle")) return true;
     const img = embed.querySelector("img");
     const rect = (img || embed).getBoundingClientRect();
     const edge = 18;
@@ -21561,8 +21580,16 @@ class ImageMoveManager {
     this.updateFloatingPreview(evt.clientX, evt.clientY);
     const target = this.getEditorPositionAtPointer(drag.editor, evt);
     if (target) {
-      drag.lastTarget = target;
-      drag.editor.setCursor(target);
+      const so = this.posToOffset(drag.editor, drag.start);
+      const eo = this.posToOffset(drag.editor, drag.end);
+      const to = this.posToOffset(drag.editor, target);
+      let finalTarget = target;
+      if (so !== null && eo !== null && to !== null && to >= so && to <= eo && drag.embedRect) {
+        const after = evt.clientX > drag.embedRect.left + drag.embedRect.width / 2;
+        finalTarget = after ? drag.end : drag.start;
+      }
+      drag.lastTarget = finalTarget;
+      drag.editor.setCursor(finalTarget);
       drag.editor.focus();
     }
   }
@@ -21618,10 +21645,13 @@ class ImageMoveManager {
     try {
       const cm = editor.cm;
       if (cm?.posAtCoords) {
-        const pos = cm.posAtCoords({ x: evt.clientX, y: evt.clientY });
-        if (pos) return { line: pos.line, ch: pos.ch };
+      const pos = cm.posAtCoords({ x: evt.clientX, y: evt.clientY });
+      if (pos) {
+        const offset = typeof pos.from === "number" ? pos.from : (typeof pos.pos === "number" ? pos.pos : null);
+        if (offset !== null) return editor.offsetToPos(offset);
       }
-    } catch {}
+      }
+    } catch (e) { /* ignore */ }
     return null;
   }
 
@@ -21688,12 +21718,17 @@ class ImageMoveManager {
 
   getImagePathFromEmbed(embed) {
     if (!embed) return null;
-    const source = embed.getAttribute("src") || embed.dataset?.src || embed.querySelector("img")?.getAttribute("alt") || "";
-    const direct = this.resolvePath(source);
-    if (direct) return direct;
-    const img = embed.querySelector("img");
-    const src = img?.getAttribute("src") || "";
-    return this.resolvePath(src);
+    const img = embed.tagName === "IMG" ? embed : embed.querySelector("img");
+    const srcAttr = embed.getAttribute("src") || embed.dataset?.src || "";
+    const imgAlt = img?.getAttribute("alt") || "";
+    const imgSrc = img?.getAttribute("src") || "";
+    const imgSrcData = img?.dataset?.src || "";
+    const candidates = [srcAttr, imgAlt, imgSrc, imgSrcData];
+    for (const c of candidates) {
+      const resolved = this.resolvePath(c);
+      if (resolved) return resolved;
+    }
+    return null;
   }
 
   resolvePath(value) {
