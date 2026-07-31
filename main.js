@@ -21578,8 +21578,12 @@ class ImageMoveManager {
     evt.stopImmediatePropagation?.();
     embed.removeClass("iflow-moving");
     const target = drag.lastTarget || this.getEditorPositionAtPointer(drag.editor, evt) || drag.editor.getCursor();
-    this.cleanupPointerDrag(false);
-    if (drag.moved) await this.moveDraggedImage(drag.editor, target, drag);
+    if (drag.moved) {
+      this.cleanupPointerDrag(false);
+      await this.moveDraggedImage(drag.editor, target, drag);
+    } else {
+      this.cleanupPointerDrag(true);
+    }
   }
 
   cleanupPointerDrag(clearState = true) {

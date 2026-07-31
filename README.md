@@ -37,6 +37,12 @@ https://github.com/jiujiu1771/obsidian-image-flow
 
 ## 更新日志
 
+### v0.2.3
+
+- **修复：点击图片但未移动后，再次拖拽失效**
+  - 根因：`onPointerUp` 在「按下但未移动」分支调用 `cleanupPointerDrag(false)` 不清理 `this.dragState`，只有「已移动」分支的 `moveDraggedImage` 内部会清。v0.2.2 删除编辑按钮后，用户更易单纯点击图片（而非拖动），导致 `dragState` 残留，下一次 pointerdown 被 `onCapturePointerDown` 首行 `if (... || this.dragState) return;` 拦截，表现为「拖不动」。
+  - 修复：未移动分支改调 `cleanupPointerDrag(true)` 完整清理 `dragState`；已移动分支维持原逻辑（`cleanupPointerDrag(false)` 保留 state 给 `moveDraggedImage` 用）。
+
 ### v0.2.2
 
 - **移除：图片右上角「编辑图片链接」按钮**
