@@ -37,6 +37,14 @@ https://github.com/jiujiu1771/obsidian-image-flow
 
 ## 更新日志
 
+### v0.2.4
+
+- **修复：Obsidian 1.13+ 原生图片放大 / 编辑功能失效**
+  - 根因：v0.2.2/v0.2.3 的 `onCapturePointerDown` 在 document capture 阶段对任何落在图片上的 pointerdown 立即 `startPointerDrag` 并 `preventDefault + stopPropagation`，Obsidian 1.13+ 原生图片 widget 收不到 pointerdown，导致放大镜按钮 click 不触发、widget 选中（编辑态）不进入。
+  - 修复：引入 4px 拖拽阈值机制——pointerdown 时只进入 `pendingDrag` 态，**不阻止默认行为**，让原生点击/选中/放大正常；仅当指针移动超过 4px 才升级为真正拖拽（`startPointerDrag` 抢回 pointer capture + preventDefault）。缩放手柄在 pointerdown 阶段直接放行。
+  - 同步移除 `startPointerDrag` 内的 `evt.button` / `isResizeGesture` 检查（升级时 evt 是 pointermove，button=-1 会误拒；isResizeGesture 已在 pointerdown 阶段用准确坐标检查过）。
+  - 构造函数加 `pendingDrag / boundPendingMove / boundPendingUp` 字段，`unload` 调 `cancelPendingDrag` 清理。
+
 ### v0.2.3
 
 - **修复：点击图片但未移动后，再次拖拽失效**

@@ -21298,8 +21298,11 @@ class ImageMoveManager {
   constructor(plugin) {
     this.plugin = plugin;
     this.dragState = null;
+    this.pendingDrag = null;
     this.scanTimer = null;
     this.boundCapturePointerDown = null;
+    this.boundPendingMove = null;
+    this.boundPendingUp = null;
   }
 
   register() {
@@ -21329,6 +21332,7 @@ class ImageMoveManager {
       document.removeEventListener("pointerdown", this.boundCapturePointerDown, { capture: true });
       this.boundCapturePointerDown = null;
     }
+    this.cancelPendingDrag();
     this.cleanupPointerDrag();
     this.dragState = null;
   }
@@ -21368,13 +21372,14 @@ class ImageMoveManager {
   }
 
   onCapturePointerDown(evt) {
-    if (!this.isEnabled() || this.dragState) return;
+    if (!this.isEnabled() || this.dragState || this.pendingDrag) return;
     if (evt.button !== 0) return;
     const target = evt.target;
     if (!target?.closest) return;
     if (this.isSettingsUiTarget(target)) return;
     const embed = this.findImageEmbedFromTarget(target);
     if (!embed) return;
+    if (this.isResizeGesture(evt, embed)) return;
 
     const view = this.getMarkdownViewForElement(embed);
     if (!view || !view.file || !view.editor) return;
@@ -21384,7 +21389,49 @@ class ImageMoveManager {
     if (embed.dataset.iflowMoveDecorated !== "true") {
       this.decorateEmbed(embed, view.file.path);
     }
-    this.startPointerDrag(evt, embed, view.file.path, imagePath);
+    this.beginPendingDrag(evt, embed, view.file.path, imagePath);
+  }
+
+  beginPendingDrag(evt, embed, notePath, imagePath) {
+    this.pendingDrag = {
+      embed,
+      notePath,
+      imagePath,
+      startX: evt.clientX,
+      startY: evt.clientY,
+      pointerId: evt.pointerId
+    };
+    this.boundPendingMove = event => this.onPendingPointerMove(event);
+    this.boundPendingUp = event => this.onPendingPointerUp(event);
+    document.addEventListener("pointermove", this.boundPendingMove, { capture: true });
+    document.addEventListener("pointerup", this.boundPendingUp, { capture: true, once: true });
+    document.addEventListener("pointercancel", this.boundPendingUp, { capture: true, once: true });
+  }
+
+  onPendingPointerMove(evt) {
+    const p = this.pendingDrag;
+    if (!p || p.pointerId !== evt.pointerId) return;
+    const dx = evt.clientX - p.startX;
+    const dy = evt.clientY - p.startY;
+    if (dx * dx + dy * dy < 16) return;
+    this.cancelPendingDrag();
+    this.startPointerDrag(evt, p.embed, p.notePath, p.imagePath);
+  }
+
+  onPendingPointerUp(evt) {
+    this.cancelPendingDrag();
+  }
+
+  cancelPendingDrag() {
+    if (this.boundPendingMove) {
+      document.removeEventListener("pointermove", this.boundPendingMove, { capture: true });
+      this.boundPendingMove = null;
+    }
+    if (this.boundPendingUp) {
+      document.removeEventListener("pointerup", this.boundPendingUp, { capture: true });
+      this.boundPendingUp = null;
+    }
+    this.pendingDrag = null;
   }
 
   findImageEmbedFromTarget(target) {
@@ -21484,8 +21531,6 @@ class ImageMoveManager {
 
   startPointerDrag(evt, embed, notePath, imagePath) {
     if (this.dragState) return;
-    if (evt.button !== 0) return;
-    if (this.isResizeGesture(evt, embed)) return;
     const view = this.getMarkdownViewForElement(embed);
     if (!view || !view.editor || !view.file) return;
     const match = this.findSingleImageMatch(view.editor, imagePath, embed);
