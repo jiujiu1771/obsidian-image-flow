@@ -21320,6 +21320,14 @@ class ImageMoveManager {
         document.removeEventListener("pointerdown", this.boundCapturePointerDown, { capture: true });
       }
     });
+    this.boundWindowBlur = () => this.resetAllDragState();
+    window.addEventListener("blur", this.boundWindowBlur);
+    this.plugin.register(() => {
+      if (this.boundWindowBlur) {
+        window.removeEventListener("blur", this.boundWindowBlur);
+        this.boundWindowBlur = null;
+      }
+    });
     this.scheduleScan();
   }
 
@@ -21334,7 +21342,7 @@ class ImageMoveManager {
     }
     this.cancelPendingDrag();
     this.cleanupPointerDrag();
-    this.dragState = null;
+    this.resetAllDragState();
   }
 
   isEnabled() {
@@ -21372,11 +21380,15 @@ class ImageMoveManager {
   }
 
   onCapturePointerDown(evt) {
+    const nowStamp = Date.now();
+    if (this.dragState && nowStamp - (this.dragState.startedAt || 0) > 20000) this.resetAllDragState();
+    if (this.pendingDrag && nowStamp - (this.pendingDrag.startedAt || 0) > 5000) this.resetAllDragState();
     if (!this.isEnabled() || this.dragState || this.pendingDrag) return;
     if (evt.button !== 0) return;
     const target = evt.target;
     if (!target?.closest) return;
     if (this.isSettingsUiTarget(target)) return;
+    if (!this.isMarkdownLeafTarget(target)) return;
     const embed = this.findImageEmbedFromTarget(target);
     if (!embed) return;
     if (this.isResizeGesture(evt, embed)) return;
@@ -21397,6 +21409,7 @@ class ImageMoveManager {
       embed,
       notePath,
       imagePath,
+      startedAt: Date.now(),
       startX: evt.clientX,
       startY: evt.clientY,
       pointerId: evt.pointerId
@@ -21406,6 +21419,11 @@ class ImageMoveManager {
     document.addEventListener("pointermove", this.boundPendingMove, { capture: true });
     document.addEventListener("pointerup", this.boundPendingUp, { capture: true, once: true });
     document.addEventListener("pointercancel", this.boundPendingUp, { capture: true, once: true });
+    if (this.pendingWatchdog) window.clearTimeout(this.pendingWatchdog);
+    this.pendingWatchdog = window.setTimeout(() => {
+      this.pendingWatchdog = null;
+      this.resetAllDragState();
+    }, 5000);
   }
 
   onPendingPointerMove(evt) {
@@ -21423,14 +21441,55 @@ class ImageMoveManager {
   }
 
   cancelPendingDrag() {
+    if (this.pendingWatchdog) {
+      window.clearTimeout(this.pendingWatchdog);
+      this.pendingWatchdog = null;
+    }
     if (this.boundPendingMove) {
       document.removeEventListener("pointermove", this.boundPendingMove, { capture: true });
       this.boundPendingMove = null;
     }
     if (this.boundPendingUp) {
       document.removeEventListener("pointerup", this.boundPendingUp, { capture: true });
+      document.removeEventListener("pointercancel", this.boundPendingUp, { capture: true });
       this.boundPendingUp = null;
     }
+    this.pendingDrag = null;
+  }
+
+  isMarkdownLeafTarget(target) {
+    if (!target) return false;
+    const workspace = this.plugin.app.workspace;
+    let leaves = [];
+    if (typeof workspace.getLeavesOfType === "function") {
+      try {
+        leaves = workspace.getLeavesOfType("markdown") || [];
+      } catch (error) {
+        leaves = [];
+      }
+    }
+    if (leaves.length === 0 && typeof workspace.iterateAllLeaves === "function") {
+      try {
+        const all = [];
+        workspace.iterateAllLeaves(leaf => all.push(leaf));
+        leaves = all;
+      } catch (error) {
+        leaves = [];
+      }
+    }
+    for (const leaf of leaves) {
+      const view = leaf?.view;
+      if (!this.isMarkdownView(view)) continue;
+      const container = view.containerEl;
+      if (container && typeof container.contains === "function" && container.contains(target)) return true;
+    }
+    return false;
+  }
+
+  resetAllDragState() {
+    this.cancelPendingDrag();
+    this.cleanupPointerDrag(true);
+    this.dragState = null;
     this.pendingDrag = null;
   }
 
@@ -21547,6 +21606,8 @@ class ImageMoveManager {
       completed: false,
       editor: view.editor,
       pointerId: evt.pointerId,
+      startedAt: Date.now(),
+      captureEl: embed,
       preview: this.createFloatingPreview(match.fullMatch),
       lastTarget: null,
       moved: false,
@@ -21555,7 +21616,9 @@ class ImageMoveManager {
     evt.preventDefault();
     evt.stopPropagation();
     evt.stopImmediatePropagation?.();
-    embed.setPointerCapture?.(evt.pointerId);
+    try {
+      embed.setPointerCapture?.(evt.pointerId);
+    } catch (error) { /* ignore */ }
     embed.addClass("iflow-moving");
     this.updateFloatingPreview(evt.clientX, evt.clientY);
     this.boundPointerMove = event => this.onPointerMove(event);
@@ -21635,6 +21698,15 @@ class ImageMoveManager {
     document.removeEventListener("pointermove", this.boundPointerMove, { capture: true });
     document.removeEventListener("pointerup", this.boundPointerUp, { capture: true });
     document.removeEventListener("pointercancel", this.boundPointerUp, { capture: true });
+    const captureEl = this.dragState?.captureEl;
+    if (captureEl && typeof captureEl.releasePointerCapture === "function") {
+      try {
+        if (captureEl.hasPointerCapture?.(this.dragState.pointerId)) {
+          captureEl.releasePointerCapture(this.dragState.pointerId);
+        }
+      } catch (error) { /* ignore */ }
+    }
+    if (this.dragState) this.dragState.captureEl = null;
     this.dragState?.preview?.remove();
     this.boundPointerMove = null;
     this.boundPointerUp = null;
