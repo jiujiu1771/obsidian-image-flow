@@ -42,6 +42,7 @@ const DEFAULT_SETTINGS = {
   customAssetFolder: "",
   outputFormat: "jpeg",
   quality: 0.8,
+  maxDimension: 0,
   enableRenameTemplate: false,
   renameTemplate: "{noteName}-{date}-{time}-{index}",
   copyLinkPolicy: "short-if-unique",
@@ -21073,7 +21074,7 @@ class ImportManager {
     const path = await this.uniquePath(destinationFolder, `${baseName}.${ext}`);
     const created = await this.plugin.app.vault.createBinary(path, target.buffer);
 
-    this.showSizeComparisonNotification(file.size, target.buffer.byteLength);
+    if (!target.keptOriginal) this.showSizeComparisonNotification(file.size, target.buffer.byteLength);
     if (target.notice) new Notice(target.notice);
     return created;
   }
@@ -21115,13 +21116,28 @@ class ImportManager {
 
     try {
       const isHeic = await this.isHeicFile(file);
-      if (isHeic && (targetExt === "jpeg" || targetExt === "png")) {
+      const maxDimension = this.plugin.settings.maxDimension ?? 0;
+      // HEIC can only be decoded through heic-to. Use its direct path when no
+      // resize is requested; otherwise go through the canvas so the size cap applies.
+      if (isHeic && (targetExt === "jpeg" || targetExt === "png") && !(maxDimension > 0)) {
         const blob = await this.convertHeicDirect(file, targetExt);
         return { ext: targetExt, buffer: await blob.arrayBuffer(), notice: null };
       }
       const mime = targetExt === "png" ? "image/png" : targetExt === "jpg" || targetExt === "jpeg" ? "image/jpeg" : "image/webp";
-      const blob = await this.drawToBlob(file, mime, this.plugin.settings.quality);
-      return { ext: targetExt, buffer: await blob.arrayBuffer(), notice: null };
+      const blob = await this.drawToBlob(file, mime, this.plugin.settings.quality, maxDimension);
+      const convertedBuffer = await blob.arrayBuffer();
+      // "Compression" must never make a file bigger. Screenshots and already
+      // optimized JPEG/WebP often grow when re-encoded, so keep the original
+      // bytes when the converted result is not actually smaller.
+      if (file.size > 0 && convertedBuffer.byteLength >= file.size) {
+        return {
+          ext: originalExt,
+          buffer: await file.arrayBuffer(),
+          notice: `转换后没有变小（${this.formatFileSize(file.size)} → ${this.formatFileSize(convertedBuffer.byteLength)}），已保留原图 ${file.name}。可在设置里调低“压缩质量”或设置“最长边限制”。`,
+          keptOriginal: true
+        };
+      }
+      return { ext: targetExt, buffer: convertedBuffer, notice: null };
     } catch (error) {
       console.warn("Image Flow conversion fallback", error);
       const reason = error instanceof Error ? error.message : String(error);
@@ -21133,14 +21149,25 @@ class ImportManager {
     }
   }
 
-  async drawToBlob(file, mime, quality) {
+  async drawToBlob(file, mime, quality, maxDimension = 0) {
     const bitmap = await this.decodeImage(file);
+    let width = bitmap.width;
+    let height = bitmap.height;
+    if (maxDimension > 0) {
+      const scale = Math.min(1, maxDimension / Math.max(width, height));
+      if (scale < 1) {
+        width = Math.max(1, Math.round(width * scale));
+        height = Math.max(1, Math.round(height * scale));
+      }
+    }
     const canvas = document.createElement("canvas");
-    canvas.width = bitmap.width;
-    canvas.height = bitmap.height;
+    canvas.width = width;
+    canvas.height = height;
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("Canvas is unavailable.");
-    ctx.drawImage(bitmap, 0, 0);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(bitmap, 0, 0, width, height);
     if (typeof bitmap.close === "function") bitmap.close();
     return await new Promise((resolve, reject) => {
       canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error("Canvas conversion failed.")), mime, quality);
@@ -22843,7 +22870,7 @@ class ImageFlowSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("压缩质量")
-      .setDesc(`当前：${Math.round(this.plugin.settings.quality * 100)}%`)
+      .setDesc(`当前：${Math.round(this.plugin.settings.quality * 100)}%。这是画质档位，不是文件体积比例；只对 JPEG/WebP 有效，PNG 是无损格式不受影响。`)
       .addSlider(slider => slider
         .setLimits(10, 100, 1)
         .setValue(Math.round(this.plugin.settings.quality * 100))
@@ -22852,6 +22879,18 @@ class ImageFlowSettingTab extends PluginSettingTab {
           this.plugin.settings.quality = value / 100;
           await this.plugin.saveSettings();
           this.display();
+        }));
+
+    new Setting(containerEl)
+      .setName("最长边限制（像素）")
+      .setDesc("超过这个像素数的图片会等比缩小。0 表示不缩。想明显压小图片，填 1600 或 1920 通常够用。只填数字。")
+      .addText(text => text
+        .setPlaceholder("0")
+        .setValue(String(this.plugin.settings.maxDimension ?? 0))
+        .onChange(async value => {
+          const parsed = parseInt(value, 10);
+          this.plugin.settings.maxDimension = Number.isFinite(parsed) && parsed > 0 ? Math.min(parsed, 10000) : 0;
+          await this.plugin.saveSettings();
         }));
 
     new Setting(containerEl)
