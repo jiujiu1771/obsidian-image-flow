@@ -19,3 +19,4 @@ Thumbs.db
 .obsidian/
 data.json
 .DS_Store
+main.js.bak-*
