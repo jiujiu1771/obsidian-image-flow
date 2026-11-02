@@ -18,3 +18,4 @@ Thumbs.db
 # Obsidian
 .obsidian/
 data.json
+.DS_Store
