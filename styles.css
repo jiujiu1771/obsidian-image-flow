@@ -761,4 +761,6 @@
 .image-manager-pin-indicator svg{width:12px;height:12px}
 .image-manager-pin-button.is-pinned{color:var(--interactive-accent)}
 .image-manager-pin-button.is-pinned:hover{background:var(--interactive-accent);color:var(--text-on-accent)}
-.image-manager-image-actions{flex-wrap:wrap;max-width:calc(100% - 8px)}
+.image-manager-image-actions{flex-wrap:nowrap;justify-content:flex-start;width:fit-content;gap:2px;padding:3px;max-width:calc(100% - 8px)}
+.image-manager-image-actions .image-manager-action-button{flex:0 0 auto;width:20px;height:20px;padding:2px}
+.image-manager-image-actions .image-manager-action-button svg{width:13px;height:13px}
