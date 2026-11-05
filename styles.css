@@ -764,3 +764,11 @@
 .image-manager-image-actions{left:4px;right:4px;width:auto;flex-wrap:nowrap;justify-content:space-between;gap:2px;padding:3px}
 .image-manager-image-actions .image-manager-action-button{flex:0 0 auto;width:20px;height:20px;padding:2px}
 .image-manager-image-actions .image-manager-action-button svg{width:13px;height:13px}
+
+/* Image Flow: copyable path in preview details */
+.image-manager-detail-item-copyable{cursor:pointer;border-radius:var(--radius-s);padding:2px 6px;margin:0 -6px;transition:background-color .15s ease}
+.image-manager-detail-item-copyable:hover{background:var(--background-modifier-hover)}
+.image-manager-detail-copy-icon{display:inline-flex;align-items:center;flex:0 0 auto;color:var(--text-faint);margin-top:1px}
+.image-manager-detail-copy-icon svg{width:13px;height:13px}
+.image-manager-detail-item-copyable:hover .image-manager-detail-copy-icon{color:var(--text-normal)}
+.image-manager-detail-item-copyable.is-copied .image-manager-detail-copy-icon{color:var(--text-success)}
